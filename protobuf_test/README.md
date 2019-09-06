@@ -36,3 +36,71 @@ Gender: MALE
 Phone: 010-4401-0000
 ```
 
+# ONNX 테스트
+
+* https://github.com/onnx/onnx
+
+* onnx python 설치
+```
+$ pip3 install onnx --user
+```
+
+* https://github.com/onnx/onnx/blob/master/onnx/examples/load_model.ipynb
+
+* single_relu.onnx 파일을 load해서 print 해보기
+```
+$ python3 onnx_load.py
+ir_version: 3
+producer_name: "backend-test"
+graph {
+  node {
+    input: "x"
+    output: "y"
+    name: "test"
+    op_type: "Relu"
+  }
+  name: "SingleRelu"
+  input {
+    name: "x"
+    type {
+      tensor_type {
+        elem_type: 1
+        shape {
+          dim {
+            dim_value: 1
+          }
+          dim {
+            dim_value: 2
+          }
+        }
+      }
+    }
+  }
+  output {
+    name: "y"
+    type {
+      tensor_type {
+        elem_type: 1
+        shape {
+          dim {
+            dim_value: 1
+          }
+          dim {
+            dim_value: 2
+          }
+        }
+      }
+    }
+  }
+}
+opset_import {
+  version: 6
+}
+```
+
+* protoc로 python 코드 생성, onnx_pb2.py 파일이 생성됨
+```
+$ protoc --python_out=. onnx.proto
+```
+
+* 
