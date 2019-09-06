@@ -103,4 +103,44 @@ opset_import {
 $ protoc --python_out=. onnx.proto
 ```
 
-* 
+* onnx_test.py 로 single_relu.onnx 읽어보기
+```
+$ python3 onnx_test.py
+ir_version: 3
+graph.name: SingleRelu
+[input: "x"
+output: "y"
+name: "test"
+op_type: "Relu"
+]
+[name: "x"
+type {
+  tensor_type {
+    elem_type: 1
+    shape {
+      dim {
+        dim_value: 1
+      }
+      dim {
+        dim_value: 2
+      }
+    }
+  }
+}
+]
+[name: "y"
+type {
+  tensor_type {
+    elem_type: 1
+    shape {
+      dim {
+        dim_value: 1
+      }
+      dim {
+        dim_value: 2
+      }
+    }
+  }
+}
+]
+```
