@@ -98,6 +98,8 @@ opset_import {
 }
 ```
 
+# onnx.proto 직접 사용해서 테스트
+
 * protoc로 python 코드 생성, onnx_pb2.py 파일이 생성됨
 ```
 $ protoc --python_out=. onnx.proto
