@@ -51,4 +51,4 @@ history = model.fit(X_train, Y_train,
 test_loss, test_acc = model.evaluate(X_validation, Y_validation)
 print('test_acc: ', test_acc)
 
-model.save("keras_model.h5")
+model.save("cnn_model(keras).h5")
