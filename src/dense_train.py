@@ -14,15 +14,14 @@ train_images = train_images.astype('float32') / 255
 test_images = test_images.reshape((10000, 28 * 28))
 test_images = test_images.astype('float32') / 255
 
-
+# 레이블을 범주형으로 인코딩
 train_labels = to_categorical(train_labels)
 test_labels = to_categorical(test_labels)
 
-
+# 모델 정의하기 (여기에서는 Sequential 클래스 사용)
 model = models.Sequential()
-model.add(layers.Dense(512, activation='relu',  e=(28 * 28,)))
+model.add(layers.Dense(512, activation='relu', input_shape=(28 * 28,)))
 model.add(layers.Dense(10, activation='softmax'))
-
 
 model.compile(optimizer='rmsprop',
                 loss='categorical_crossentropy',
@@ -37,4 +36,4 @@ model.compile(optimizer='rmsprop',
 # print('test_acc: ', test_acc)
 
 # 모델 저장
-model.save("keras_model.h5")
+model.save("dense_model(keras).h5")
