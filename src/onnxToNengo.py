@@ -42,7 +42,8 @@ class onnxToNengo:
                 self.nengoCode += self.genSoftmax(node_info)
 
     def genConv(self, node_info):
-        input_shape = self.getInputShape(node_info)
+        inputinfo = self.getInputDataInfo(node_info)
+        print(inputinfo)
         for index in range(len(node_info.attribute)):
             if node_info.attribute[index].name == "kernel_shape":
                 kernel_shape = np.array(node_info.attribute[index].ints)
@@ -68,7 +69,8 @@ class onnxToNengo:
         return code
 
     def genMatmul(self, node_info):
-        input_shape = self.getInputShape(node_info)
+        inputinfo = self.getInputDataInfo(node_info)
+        print(inputinfo)
         code = ""
         code += "matmul\n"
         return code
@@ -94,8 +96,8 @@ class onnxToNengo:
 
     def getNengoCode(self):
         return self.nengoCode
-    
-    def getInputShape(self, node_info):
+
+    def getInputDataInfo(self, node_info):
         regex = re.compile("W|W\d*")
         for m in range(len(self.onnx_model.graph.initializer)):
             weight_name = self.onnx_model.graph.initializer[m].name
@@ -112,15 +114,15 @@ class convert_snnOnnx:
     def __init__(self):
         return
 
-    def convert_snnOnnx(self, onnx_path, result_path, sn_kind):
+    def convert_snnOnnx(self, onnx_path, result_path, neuron_kind):
         sn_index = 1
         onnx_model = onnx.load(onnx_path)
         node_len = len(onnx_model.graph.node)
         for index in range(node_len):
             op_type = onnx_model.graph.node[index].op_type.lower()
             if op_type == "relu" or op_type == "sigmoid" or op_type == "tanh":
-                onnx_model.graph.node[index].op_type = sn_kind
-                onnx_model.graph.node[index].name = sn_kind + "_" + str(sn_index)
+                onnx_model.graph.node[index].op_type = neuron_kind
+                onnx_model.graph.node[index].name = neuron_kind + "_" + str(sn_index)
                 sn_index = sn_index + 1
         onnx.save(onnx_model, result_path)
         
