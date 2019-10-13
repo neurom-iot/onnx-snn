@@ -43,7 +43,6 @@ class onnxToNengo:
         node_info = onnx_model_graph_node[index]
         neuron_type = self.getNeuronType(index, onnx_model_graph_node)
         input_info = self.getInputDataInfo(node_info)
-        print(neuron_type)
         for index in range(len(node_info.attribute)):
             if node_info.attribute[index].name == "kernel_shape":
                 kernel_shape = np.array(node_info.attribute[index].ints)
@@ -72,7 +71,6 @@ class onnxToNengo:
         node_info = onnx_model_graph_node[index]
         neuron_type = self.getNeuronType(index, onnx_model_graph_node)
         input_info = self.getInputDataInfo(node_info)
-        print(neuron_type)
         code = ""
         code += "matmul\n"
         return code
@@ -128,9 +126,9 @@ class convert_snnOnnx:
         onnx.save(onnx_model, result_path)
         
 if __name__ == "__main__":
-    onnx_file_path = "cnn2onnx.onnx"
-    result_file_path = "cnn2snn.onnx"
+    onnx_file_path = "../model/model2onnx/cnn2onnx.onnx"
+    result_file_path = "../model/onnx2snn/cnn2snn.onnx"
     cso = convert_snnOnnx()
     cso.convert_snnOnnx(onnx_file_path, result_file_path, "LIF")
     otn = onnxToNengo(result_file_path)
-    otn.makefile("nengo_code.py")
+    otn.makefile("../result/nengo_code.py")
