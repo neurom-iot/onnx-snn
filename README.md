@@ -2,6 +2,7 @@
 
 ## What is ONNX-SNN
 * ONNX is an open format to represent deep learning models.
+   * ONNX protocol - https://github.com/onnx/onnx/blob/master/onnx/onnx.proto
 * ONNX-SNN is an extension for Spiking Neural Networks.
 * Its main purpose is to translate DNN model to SNN model.
 
