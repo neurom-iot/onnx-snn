@@ -6,22 +6,22 @@ from onnx import numpy_helper
 class onnxToNengo:
     def __init__(self, onnx_path):
         self.nengoCode = ""
+        self.neuron_type = "LIF"    #default Neuron Type = LIF
         self.onnx_model = onnx.load(onnx_path)
         # self.printNode()
         self.setNetwork()
 
     def setNetwork(self):
-        #import code
-        self.nengoCode += "import nengo\n"
-        self.nengoCode += "import numpy as np\n"
+        #init code generating
+        self.nengoCode += self.genInit(self.neuron_type)
 
-        #Network code
-        self.neuron_type = "LIF"    #default Neuron Type = LIF
-        self.nengoCode += "with nengo.Network() as net:\n"
+        #layer code generating
         onnx_model_graph = self.onnx_model.graph
         onnx_model_graph_node = onnx_model_graph.node
         node_len = len(onnx_model_graph.node)
         input_info = np.array(onnx_model_graph.input[0].type.tensor_type.shape.dim)
+        self.nengoCode += self.genInput(input_info)
+
         for index in range(node_len):
             node_info = onnx_model_graph_node[index]
             op_type = node_info.op_type.lower()
@@ -39,10 +39,35 @@ class onnxToNengo:
             elif op_type == "matmul":
                 self.nengoCode += self.genMatmul(index, onnx_model_graph_node)
 
+    def genInit(self, neuron_type):
+        code = ""
+        code += "import nengo\n"
+        code += "import numpy as np\n\n"
+        code += "with nengo.Network() as net:\n"
+        code += "\tnet.config[nengo.Ensemble].max_rates = nengo.dists.Choice([100])\n"
+        code += "\tnet.config[nengo.Ensemble].intercepts = nengo.dists.Choice([0])\n"
+        code += "\tneuron_type = nengo." + str(neuron_type) + "(amplitude=0.01)\n"
+        code += "\tnengo_dl.configure_settings(trainable=False)\n"
+        code += "\t\n"
+        return code
+    
+    def genInput(self, input_info):
+        length = len(input_info)
+        dim_array = []
+        for index in range(1, length):
+            dim_array.append(re.findall('\d+', str(input_info[index]))[0])
+        
+        code = ""
+        code += "\tinp = nengo.Node([0]"
+        for index in range(len(dim_array)):
+            code += " * " + str(dim_array[index])
+        code += ")\n"
+        return code
+
     def genConv(self, index, onnx_model_graph_node):
         node_info = onnx_model_graph_node[index]
         neuron_type = self.getNeuronType(index, onnx_model_graph_node)
-        input_info = self.getInputDataInfo(node_info)
+        input_info = self.getLayer2LayerInputDataInfo(node_info)
         for index in range(len(node_info.attribute)):
             if node_info.attribute[index].name == "kernel_shape":
                 kernel_shape = np.array(node_info.attribute[index].ints)
@@ -70,7 +95,7 @@ class onnxToNengo:
     def genMatmul(self, index, onnx_model_graph_node):
         node_info = onnx_model_graph_node[index]
         neuron_type = self.getNeuronType(index, onnx_model_graph_node)
-        input_info = self.getInputDataInfo(node_info)
+        input_info = self.getLayer2LayerInputDataInfo(node_info)
         code = ""
         code += "matmul\n"
         return code
@@ -96,7 +121,7 @@ class onnxToNengo:
     def getNengoCode(self):
         return self.nengoCode
 
-    def getInputDataInfo(self, node_info):
+    def getLayer2LayerInputDataInfo(self, node_info):
         regex = re.compile("W|W\d*")
         for m in range(len(self.onnx_model.graph.initializer)):
             weight_name = self.onnx_model.graph.initializer[m].name
