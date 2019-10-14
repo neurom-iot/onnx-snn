@@ -36,4 +36,4 @@ model.compile(optimizer='rmsprop',
 # print('test_acc: ', test_acc)
 
 # 모델 저장
-model.save("dense_model(keras).h5")
+model.save("../model/dnn/dense_model(keras).h5")
