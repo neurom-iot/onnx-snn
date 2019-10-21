@@ -4,21 +4,23 @@ import numpy as np
 from onnx import numpy_helper
 
 class onnxToNengo:
-    def __init__(self, onnx_path):
+    def __init__(self, onnx_path, neuron_type = None, amplitude = None):
         self.nengoCode = ""
         self.neuron_type = "LIF"    #default Neuron Type = LIF
+        if amplitude == None:
+            self.amplitude = 0.01   #default amplitude = 0.01
+        else:
+            self.amplitude = amplitude
         self.onnx_model = onnx.load(onnx_path)
         # self.printNode()
         self.setNetwork()
 
     def setNetwork(self):
         #init code generating
-        amplitude = 0.01
-        self.nengoCode += self.genInit(self.neuron_type, amplitude)
+        self.nengoCode += self.genInit()
 
         #layer code generating
         onnx_model_graph = self.onnx_model.graph
-        onnx_model_graph_node = onnx_model_graph.node
         node_len = len(onnx_model_graph.node)
         input_shape = np.array(onnx_model_graph.input[0].type.tensor_type.shape.dim)
         temp = []
@@ -31,32 +33,36 @@ class onnxToNengo:
         self.nengoCode += code
 
         for index in range(node_len):
-            node_info = onnx_model_graph_node[index]
+            node_info = onnx_model_graph.node[index]
             op_type = node_info.op_type.lower()
             if op_type == "conv":
-                code, output_shape = self.genConv2dLayer(output_shape, index, onnx_model_graph_node)
+                code, output_shape = self.genConv2dLayer(output_shape, index, onnx_model_graph)
                 self.nengoCode += code
             elif op_type == "maxpool":
                 code, output_shape = self.genMaxpool2dLayer(output_shape, node_info)
                 self.nengoCode += code
+            elif op_type == "averagepool":
+                code, output_shape = self.genAveragepool2dLayer(output_shape, node_info)
+                self.nengoCode += code
             elif op_type == "reshape":
                 regex = re.compile("flatten")
                 if regex.findall(node_info.name):
-                    code = self.genFlatten(node_info)
+                    code, output_shape= self.genFlatten(output_shape)
                     self.nengoCode += code
-            elif op_type == "matmul":
-                code = self.genMatmul(index, onnx_model_graph_node)
+            elif op_type == "add":
+                code, output_shape = self.genDense(output_shape, index, onnx_model_graph)
                 self.nengoCode += code
 
-    def genInit(self, neuron_type, amplitude):
+    def genInit(self):
         code = "#onnx to nengo convert code"
+        code += "#training the network using a rate-based approximation"
         code += "import nengo\n"
         code += "import nengo_dl\n"
         code += "import numpy as np\n\n"
         code += "with nengo.Network() as net:\n"
         code += "\tnet.config[nengo.Ensemble].max_rates = nengo.dists.Choice([100])\n"
         code += "\tnet.config[nengo.Ensemble].intercepts = nengo.dists.Choice([0])\n"
-        code += "\tneuron_type = nengo." + str(neuron_type) + "(amplitude=" + str(amplitude) + ")\n"
+        code += "\tdefault_neuron_type = nengo." + str(self.neuron_type) + "(amplitude=" + str(self.amplitude) + ")\n"
         code += "\tnengo_dl.configure_settings(trainable=False)\n"
         code += "\t\n"
         return code
@@ -71,13 +77,16 @@ class onnxToNengo:
         for index in range(len(dim_array)):
             code += " * " + str(dim_array[index])
         code += ")\n"
+        code += "\tx = inp\n"
         output_shape = input_shape
         return code, output_shape
 
-    def genConv2dLayer(self, input_shape, index, onnx_model_graph_node):
+    def genConv2dLayer(self, input_shape, index, onnx_model_graph):
+        onnx_model_graph_node = onnx_model_graph.node
         node_info = onnx_model_graph_node[index]
         neuron_type = self.getNeuronType(index, onnx_model_graph_node)
-        filters = self.getFilterSize(node_info)
+        regex = re.compile("W|W\d*")
+        filters = self.getWeightShape(node_info, onnx_model_graph, regex)
         for index in range(len(node_info.attribute)):
             if node_info.attribute[index].name == "kernel_shape":
                 kernel_size = node_info.attribute[index].ints[0]
@@ -85,8 +94,11 @@ class onnxToNengo:
                 strides = node_info.attribute[index].ints[0]            #conv2d stride: default 1
         output_shape = [int((input_shape[0] - kernel_size) / strides + 1), int((input_shape[1] - kernel_size) / strides + 1), filters]
         code = ""
-        code += "\tx = nengo_dl.tensor_layer(inp, tf.layers.conv2d, shape_in=(" + str(input_shape[0]) + ", " + str(input_shape[1]) + ", " + str(input_shape[2]) + "), filters=" + str(filters) + ", kernel_size=" + str(kernel_size) + ")\n"
-        code += "\tx = nengo_dl.tensor_layer(x, neuron_type)\n"
+        code += "\tx = nengo_dl.tensor_layer(x, tf.layers.conv2d, shape_in=(" + str(input_shape[0]) + ", " + str(input_shape[1]) + ", " + str(input_shape[2]) + "), filters=" + str(filters) + ", kernel_size=" + str(kernel_size) + ")\n"
+        if neuron_type == "lif":
+            code += "\tx = nengo_dl.tensor_layer(x, nengo." + str(neuron_type).upper() + "(amplitude=" + str(self.amplitude) + "))\n"
+        elif neuron_type == None:   #default neuron_type = LIF
+            code += "\tx = nengo_dl.tensor_layer(x, default_neuron_type)\n"
         return code, output_shape
 
     def genMaxpool2dLayer(self, input_shape, node_info):
@@ -97,20 +109,37 @@ class onnxToNengo:
                 strides = node_info.attribute[index].ints[0]            #poolv2d stride: default 2
         output_shape = [int(input_shape[0]/strides), int(input_shape[1]/strides), input_shape[2]]
         code = ""
+        code += "\tx = nengo_dl.tensor_layer(x, tf.layers.max_pooling2d, shape_in=(" + str(input_shape[0]) + ", " + str(input_shape[1]) + ", " + str(input_shape[2]) + "), pool_size=" + str(pool_size) + ", strides=" + str(strides) + ")\n"
+        return code, output_shape
+
+    def genAveragepool2dLayer(self, input_shape, node_info):
+        for index in range(len(node_info.attribute)):
+            if node_info.attribute[index].name == "kernel_shape":
+                pool_size = node_info.attribute[index].ints[0]
+            elif node_info.attribute[index].name == "strides":
+                strides = node_info.attribute[index].ints[0]            #poolv2d stride: default 2
+        output_shape = [int(input_shape[0]/strides), int(input_shape[1]/strides), input_shape[2]]
+        code = ""
         code += "\tx = nengo_dl.tensor_layer(x, tf.layers.average_pooling2d, shape_in=(" + str(input_shape[0]) + ", " + str(input_shape[1]) + ", " + str(input_shape[2]) + "), pool_size=" + str(pool_size) + ", strides=" + str(strides) + ")\n"
         return code, output_shape
 
-    def genFlatten(self, node_info):
+    def genFlatten(self, input_shape):
         code = ""
-        code += "flatten\n"
-        return code
+        code += "\tx = nengo_dl.tensor_layer(x, tf.layers.flatten)\n"
+        output_shape = 1
+        for index in range(len(input_shape)):
+            output_shape *= input_shape[index]
+        output_shape = [output_shape, 1]
+        return code, output_shape
 
-    def genMatmul(self, index, onnx_model_graph_node):
-        node_info = onnx_model_graph_node[index]
-        neuron_type = self.getNeuronType(index, onnx_model_graph_node)
+    def genDense(self, input_shape, index, onnx_model_graph):
+        node_info = onnx_model_graph.node[index]
+        regex = re.compile("\d*")
+        dense_num = self.getWeightShape(node_info, onnx_model_graph, regex)
         code = ""
-        code += "matmul\n"
-        return code
+        code += "\tx = nengo_dl.tensor_layer(x, tf.layers.dense, units=" + str(dense_num) + ")\n"
+        output_shape = [dense_num, 1]
+        return code, output_shape
     
     def getNeuronType(self, node_index, onnx_model_graph_node):
         node_len = len(onnx_model_graph_node)
@@ -133,13 +162,12 @@ class onnxToNengo:
     def getNengoCode(self):
         return self.nengoCode
 
-    def getFilterSize(self, node_info):
-        regex = re.compile("W|W\d*")
-        for m in range(len(self.onnx_model.graph.initializer)):
-            weight_name = self.onnx_model.graph.initializer[m].name
+    def getWeightShape(self, node_info, onnx_model_graph, regex):
+        for m in range(len(onnx_model_graph.initializer)):
+            weight_name = onnx_model_graph.initializer[m].name
             for n in range(len(node_info.input)):
                 if node_info.input[n] == weight_name and regex.findall(weight_name):
-                    shape = self.onnx_model.graph.initializer[m].dims
+                    shape = onnx_model_graph.initializer[m].dims
                     return shape[0]
         return None
 
