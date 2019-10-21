@@ -19,8 +19,10 @@
 * Converting ONNX of DNN to ONNX-SNN
 * Reading ONNX-SNN and building Nengodl code
 
-## Things of work
-* genConv2dLayer function - padding(=border_mode) problem
-* genPool2dLayer function - kind deal(Max, Average)
-* genFlatten function
-* genMatmul function
+## To do list
+* genConv2dLayer function - padding(=border_mode) problem --> X
+* genPool2dLayer function - kind deal(Max, Average) --> O
+* genFlatten function --> O
+* genMatmul function --> O
+* softmax layer -- X
+* training, simulation --> X
