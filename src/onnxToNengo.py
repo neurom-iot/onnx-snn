@@ -1,23 +1,24 @@
 import re
 import onnx
 import numpy as np
-from onnx import numpy_helper
 
 class onnxToNengo:
-    def __init__(self, onnx_path, neuron_type = None, amplitude = None):
+    def __init__(self, onnx_path, neuron_type = None, amplitude = 0.01, batch_size = 200, steps = 30, epochs = 10, learning_rate = 0.001, device = "gpu"):
         self.nengoCode = ""
-        self.neuron_type = "LIF"    #default Neuron Type = LIF
-        if amplitude == None:
-            self.amplitude = 0.01   #default amplitude = 0.01
-        else:
-            self.amplitude = amplitude
+        self.neuron_type = "LIF"                    #default Neuron Type = LIF
+        self.amplitude = amplitude                  #default amplitude = 0.01
+        self.batch_size = batch_size                #default batch_size = 200
+        self.steps = steps                          #default steps = 50
+        self.epochs = epochs                        #default epochs = 10
+        self.learning_rate = learning_rate          #default learning_rate = 0.01
+        self.device = device                        #default device = gpu
         self.onnx_model = onnx.load(onnx_path)
-        # self.printNode()
-        self.setNetwork()
+        # self.print_node()
+        self.set_network()
 
-    def setNetwork(self):
+    def set_network(self):
         #init code generating
-        self.nengoCode += self.genInit()
+        self.nengoCode += self.gen_init()
 
         #layer code generating
         onnx_model_graph = self.onnx_model.graph
@@ -29,119 +30,179 @@ class onnxToNengo:
             data = regex.findall(str(input_shape[index]))[0]
             temp.append(int(data[2:len(data)]))
         input_shape = temp
-        code, output_shape = self.genInputLayer(input_shape)
+        code, output_shape = self.gen_input(input_shape)
         self.nengoCode += code
 
         for index in range(node_len):
             node_info = onnx_model_graph.node[index]
             op_type = node_info.op_type.lower()
             if op_type == "conv":
-                code, output_shape = self.genConv2dLayer(output_shape, index, onnx_model_graph)
+                code, output_shape = self.convert_conv2d(output_shape, index, onnx_model_graph)
                 self.nengoCode += code
             elif op_type == "maxpool":
-                code, output_shape = self.genMaxpool2dLayer(output_shape, node_info)
+                code, output_shape = self.convert_maxpool(output_shape, node_info)
                 self.nengoCode += code
             elif op_type == "averagepool":
-                code, output_shape = self.genAveragepool2dLayer(output_shape, node_info)
+                code, output_shape = self.convert_avgpool2d(output_shape, node_info)
                 self.nengoCode += code
             elif op_type == "reshape":
                 regex = re.compile("flatten")
                 if regex.findall(node_info.name):
-                    code, output_shape= self.genFlatten(output_shape)
+                    code, output_shape= self.convert_flatten(output_shape)
                     self.nengoCode += code
             elif op_type == "add":
-                code, output_shape = self.genDense(output_shape, index, onnx_model_graph)
+                code, output_shape = self.convert_dense(output_shape, index, onnx_model_graph)
                 self.nengoCode += code
 
-    def genInit(self):
-        code = "#onnx to nengo convert code"
-        code += "#training the network using a rate-based approximation"
+        self.nengoCode += self.gen_probe()
+        self.nengoCode += self.gen_train(self.batch_size, self.steps, self.epochs, self.learning_rate, self.device)
+
+    def gen_init(self):
+        code = ""
+        code += "#onnx to nengo convert code\n"
+        code += "#training the network using a rate-based approximation\n"
         code += "import nengo\n"
         code += "import nengo_dl\n"
-        code += "import numpy as np\n\n"
+        code += "import numpy as np\n"
+        code += "import tensorflow as tf\n\n"
+        code += self.gen_dataset()
+        code += self.gen_classification()
         code += "with nengo.Network() as net:\n"
         code += "\tnet.config[nengo.Ensemble].max_rates = nengo.dists.Choice([100])\n"
         code += "\tnet.config[nengo.Ensemble].intercepts = nengo.dists.Choice([0])\n"
         code += "\tdefault_neuron_type = nengo." + str(self.neuron_type) + "(amplitude=" + str(self.amplitude) + ")\n"
         code += "\tnengo_dl.configure_settings(trainable=False)\n"
-        code += "\t\n"
+        code += "\n"
         return code
-    
-    def genInputLayer(self, input_shape):
+
+    def gen_dataset(self):
+        code = ""
+        code += "import gzip\n"
+        code += "import pickle\n"
+        code += "from urllib.request import urlretrieve\n"
+        code += "import zipfile\n\n"
+        code += "urlretrieve(\"http://deeplearning.net/data/mnist/mnist.pkl.gz\", \"mnist.pkl.gz\")\n"
+        code += "with gzip.open(\"mnist.pkl.gz\") as f:\n"
+        code += "\ttrain_data, _, test_data = pickle.load(f, encoding=\"latin1\")\n"
+        code += "train_data = list(train_data)\n"
+        code += "test_data = list(test_data)\n\n"
+        code += "for data in (train_data, test_data):\n"
+        code += "\tone_hot = np.zeros((data[0].shape[0], 10))\n"
+        code += "\tone_hot[np.arange(data[0].shape[0]), data[1]] = 1\n"
+        code += "\tdata[1] = one_hot\n\n"
+        return code
+
+    def gen_input(self, input_shape):
         length = len(input_shape)
         dim_array = []
-        for index in range(1, length):
+        for index in range(0, length):
             dim_array.append(re.findall('\d+', str(input_shape[index]))[0])
         code = ""
         code += "\tinp = nengo.Node([0]"
         for index in range(len(dim_array)):
             code += " * " + str(dim_array[index])
         code += ")\n"
-        code += "\tx = inp\n"
+        code += "\tx = inp\n\n"
         output_shape = input_shape
         return code, output_shape
 
-    def genConv2dLayer(self, input_shape, index, onnx_model_graph):
+    def convert_conv2d(self, input_shape, index, onnx_model_graph):
         onnx_model_graph_node = onnx_model_graph.node
         node_info = onnx_model_graph_node[index]
-        neuron_type = self.getNeuronType(index, onnx_model_graph_node)
+        neuron_type = self.get_neuronType(index, onnx_model_graph_node)
         regex = re.compile("W|W\d*")
-        filters = self.getWeightShape(node_info, onnx_model_graph, regex)
+        filters = self.get_filterNum(node_info, onnx_model_graph, regex)
         for index in range(len(node_info.attribute)):
             if node_info.attribute[index].name == "kernel_shape":
                 kernel_size = node_info.attribute[index].ints[0]
             elif node_info.attribute[index].name == "strides":
-                strides = node_info.attribute[index].ints[0]            #conv2d stride: default 1
-        output_shape = [int((input_shape[0] - kernel_size) / strides + 1), int((input_shape[1] - kernel_size) / strides + 1), filters]
+                strides = node_info.attribute[index].ints[0]
+            elif node_info.attribute[index].name == "auto_pad":
+                padding = node_info.attribute[index].s.decode('ascii').lower()
+                if padding != "valid":
+                    padding = "same"
+        if padding == "same":
+            output_shape = [input_shape[0], input_shape[1], filters]
+        else:
+            output_shape = [int((input_shape[0] - kernel_size) / strides + 1), int((input_shape[1] - kernel_size) / strides + 1), filters]
         code = ""
-        code += "\tx = nengo_dl.tensor_layer(x, tf.layers.conv2d, shape_in=(" + str(input_shape[0]) + ", " + str(input_shape[1]) + ", " + str(input_shape[2]) + "), filters=" + str(filters) + ", kernel_size=" + str(kernel_size) + ")\n"
+        code += "\tx = nengo_dl.tensor_layer(x, tf.layers.conv2d, shape_in=(" + str(input_shape[0]) + ", " + str(input_shape[1]) + ", " + str(input_shape[2]) + "), filters=" + str(filters) + ", kernel_size=" + str(kernel_size) + ", padding=\"" + padding + "\")\n"
         if neuron_type == "lif":
-            code += "\tx = nengo_dl.tensor_layer(x, nengo." + str(neuron_type).upper() + "(amplitude=" + str(self.amplitude) + "))\n"
+            code += "\tx = nengo_dl.tensor_layer(x, nengo." + str(neuron_type).upper() + "(amplitude=" + str(self.amplitude) + "))\n\n"
         elif neuron_type == None:   #default neuron_type = LIF
-            code += "\tx = nengo_dl.tensor_layer(x, default_neuron_type)\n"
+            code += "\tx = nengo_dl.tensor_layer(x, default_neuron_type)\n\n"
         return code, output_shape
 
-    def genMaxpool2dLayer(self, input_shape, node_info):
+    def convert_maxpool(self, input_shape, node_info):
         for index in range(len(node_info.attribute)):
             if node_info.attribute[index].name == "kernel_shape":
                 pool_size = node_info.attribute[index].ints[0]
             elif node_info.attribute[index].name == "strides":
-                strides = node_info.attribute[index].ints[0]            #poolv2d stride: default 2
+                strides = node_info.attribute[index].ints[0]
         output_shape = [int(input_shape[0]/strides), int(input_shape[1]/strides), input_shape[2]]
         code = ""
-        code += "\tx = nengo_dl.tensor_layer(x, tf.layers.max_pooling2d, shape_in=(" + str(input_shape[0]) + ", " + str(input_shape[1]) + ", " + str(input_shape[2]) + "), pool_size=" + str(pool_size) + ", strides=" + str(strides) + ")\n"
+        code += "\tx = nengo_dl.tensor_layer(x, tf.layers.max_pooling2d, shape_in=(" + str(input_shape[0]) + ", " + str(input_shape[1]) + ", " + str(input_shape[2]) + "), pool_size=" + str(pool_size) + ", strides=" + str(strides) + ")\n\n"
         return code, output_shape
 
-    def genAveragepool2dLayer(self, input_shape, node_info):
+    def convert_avgpool2d(self, input_shape, node_info):
         for index in range(len(node_info.attribute)):
             if node_info.attribute[index].name == "kernel_shape":
                 pool_size = node_info.attribute[index].ints[0]
             elif node_info.attribute[index].name == "strides":
-                strides = node_info.attribute[index].ints[0]            #poolv2d stride: default 2
+                strides = node_info.attribute[index].ints[0]
         output_shape = [int(input_shape[0]/strides), int(input_shape[1]/strides), input_shape[2]]
         code = ""
-        code += "\tx = nengo_dl.tensor_layer(x, tf.layers.average_pooling2d, shape_in=(" + str(input_shape[0]) + ", " + str(input_shape[1]) + ", " + str(input_shape[2]) + "), pool_size=" + str(pool_size) + ", strides=" + str(strides) + ")\n"
+        code += "\tx = nengo_dl.tensor_layer(x, tf.layers.average_pooling2d, shape_in=(" + str(input_shape[0]) + ", " + str(input_shape[1]) + ", " + str(input_shape[2]) + "), pool_size=" + str(pool_size) + ", strides=" + str(strides) + ")\n\n"
         return code, output_shape
 
-    def genFlatten(self, input_shape):
+    def convert_flatten(self, input_shape):
         code = ""
-        code += "\tx = nengo_dl.tensor_layer(x, tf.layers.flatten)\n"
+        code += "\tx = nengo_dl.tensor_layer(x, tf.layers.flatten)\n\n"
         output_shape = 1
         for index in range(len(input_shape)):
             output_shape *= input_shape[index]
         output_shape = [output_shape, 1]
         return code, output_shape
 
-    def genDense(self, input_shape, index, onnx_model_graph):
+    def convert_dense(self, input_shape, index, onnx_model_graph):
         node_info = onnx_model_graph.node[index]
         regex = re.compile("\d*")
-        dense_num = self.getWeightShape(node_info, onnx_model_graph, regex)
+        dense_num = self.get_filterNum(node_info, onnx_model_graph, regex)
         code = ""
-        code += "\tx = nengo_dl.tensor_layer(x, tf.layers.dense, units=" + str(dense_num) + ")\n"
+        code += "\tx = nengo_dl.tensor_layer(x, tf.layers.dense, units=" + str(dense_num) + ")\n\n"
         output_shape = [dense_num, 1]
         return code, output_shape
     
-    def getNeuronType(self, node_index, onnx_model_graph_node):
+    def gen_probe(self, synapse = 0.01):
+        code = ""
+        code += "\tout_p = nengo.Probe(x)\n"
+        code += "\tout_p_filt = nengo.Probe(x, synapse=" + str(synapse) + ")\n\n"
+        return code
+
+    def gen_classification(self):
+        code = ""
+        code += "def objective(outputs, targets):\n"
+        code += "\treturn tf.nn.softmax_cross_entropy_with_logits_v2(logits=outputs, labels=targets)\n\n"
+        code += "def classification_error(outputs, targets):\n"
+        code += "\treturn 100 * tf.reduce_mean(tf.cast(tf.not_equal(tf.argmax(outputs[:, -1], axis=-1), tf.argmax(targets[:, -1], axis=-1)), tf.float32))\n\n"
+        return code
+
+    def gen_train(self, batch_size, steps, epochs, learning_rate, device):
+        code = ""
+        code += "\tminibatch_size = " + str(batch_size) + "\n"
+        code += "\tsim = nengo_dl.Simulator(net, minibatch_size=" + str(batch_size) + ", device = \"/" + str(device) + ":0\")\n\n"
+        code += "\ttrain_data = {inp: train_data[0][:, None, :], out_p: train_data[1][:, None, :]}\n\n"
+        code += "\tn_steps = " + str(steps) + "\n"
+        code += "\ttest_data = {inp: np.tile(test_data[0][:minibatch_size*2, None, :], (1, n_steps, 1)), out_p_filt: np.tile(test_data[1][:minibatch_size*2, None, :], (1, n_steps, 1))}\n\n"
+        code += "print(\"error before training: %.2f%%\" % sim.loss(test_data, {out_p_filt: classification_error}))\n"
+        code += "opt = tf.train.RMSPropOptimizer(learning_rate=" + str(learning_rate) + ")\n"
+        code += "sim.train(train_data, opt, objective={out_p: objective}, n_epochs=" + str(epochs) + ")\n"
+        code += "sim.save_params(\"./mnist_params\")\n"
+        code += "print(\"error after training: %.2f%%\" % sim.loss(test_data, {out_p_filt: classification_error}))\n\n"
+        code += "sim.close()"
+        return code
+
+    def get_neuronType(self, node_index, onnx_model_graph_node):
         node_len = len(onnx_model_graph_node)
         for index in range(node_index, node_len):
             node_info = onnx_model_graph_node[index]
@@ -149,20 +210,18 @@ class onnxToNengo:
             if op_type == "lif":
                 neuron_type = "lif"
                 return neuron_type
-            elif op_type == "softmax":
-                neuron_type = "softmax"
-                return neuron_type
+
         return None
 
     def makefile(self, result_path):
         file = open(result_path, 'w', encoding="utf-8")
-        file.write(self.getNengoCode())
+        file.write(self.get_nengoCode())
         file.close()
 
-    def getNengoCode(self):
+    def get_nengoCode(self):
         return self.nengoCode
 
-    def getWeightShape(self, node_info, onnx_model_graph, regex):
+    def get_filterNum(self, node_info, onnx_model_graph, regex):
         for m in range(len(onnx_model_graph.initializer)):
             weight_name = onnx_model_graph.initializer[m].name
             for n in range(len(node_info.input)):
@@ -171,7 +230,7 @@ class onnxToNengo:
                     return shape[0]
         return None
 
-    def printNode(self):
+    def print_node(self):
         print(self.onnx_model.graph.node)
 
 class convert_snnOnnx:
@@ -195,5 +254,5 @@ if __name__ == "__main__":
     result_file_path = "../model/onnx2snn/cnn2snn.onnx"
     cso = convert_snnOnnx()
     cso.convert_snnOnnx(onnx_file_path, result_file_path, "LIF")
-    otn = onnxToNengo(result_file_path)
+    otn = onnxToNengo(result_file_path, device = "cpu")
     otn.makefile("../result/nengo_code.py")
