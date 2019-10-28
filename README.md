@@ -20,9 +20,17 @@
 * Reading ONNX-SNN and building Nengodl code
 
 ## To do list
-* genConv2dLayer function - padding(=border_mode) problem --> X
-* genPool2dLayer function - kind deal(Max, Average) --> O
-* genFlatten function --> O
-* genMatmul function --> O
-* softmax layer -- X
-* training, simulation --> X
+* Training, prediction target data --> Mnist
+---
+* convert_conv2d - padding(=border_mode) problem --> O
+* convert_pool2d - kind deal(Max, Average) --> O
+* convert_flatten function --> O
+* convert_matmul function --> O
+* softmax --> O
+* training, simulation --> O
+* -->10/29/2019
+---
+* Apply to different models --> X
+* nengo_dl model --> onnx-snn --> onnx --> X
+* onnx model, weight --> onnx-snn --> nengo_dl model --> X
+---
