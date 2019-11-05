@@ -2,7 +2,7 @@ import re
 import onnx
 import numpy as np
 
-class onnxToNengo:
+class onnxToNengoCode:
     def __init__(self, onnx_path, neuron_type = None, amplitude = 0.01, batch_size = 200, steps = 30, epochs = 10, learning_rate = 0.001, device = "gpu"):
         self.nengoCode = ""
         self.neuron_type = "LIF"                    #default Neuron Type = LIF
@@ -39,6 +39,11 @@ class onnxToNengo:
             if op_type == "conv":
                 code, output_shape = self.convert_conv2d(output_shape, index, onnx_model_graph)
                 self.nengoCode += code
+            # elif op_type == "pad":
+            #     self.convert_zeropad2d(output_shape, index, onnx_model_graph)
+            elif op_type == "batchnormalization":
+                code, output_shape = self.convert_batchnormalization(output_shape, node_info)
+                self.nengoCode += code
             elif op_type == "maxpool":
                 code, output_shape = self.convert_maxpool(output_shape, node_info)
                 self.nengoCode += code
@@ -50,10 +55,9 @@ class onnxToNengo:
                 if regex.findall(node_info.name):
                     code, output_shape= self.convert_flatten(output_shape)
                     self.nengoCode += code
-            elif op_type == "add":
+            elif op_type == "matmul":
                 code, output_shape = self.convert_dense(output_shape, index, onnx_model_graph)
                 self.nengoCode += code
-
         self.nengoCode += self.gen_probe()
         self.nengoCode += self.gen_train(self.batch_size, self.steps, self.epochs, self.learning_rate, self.device)
 
@@ -110,8 +114,7 @@ class onnxToNengo:
         onnx_model_graph_node = onnx_model_graph.node
         node_info = onnx_model_graph_node[index]
         neuron_type = self.get_neuronType(index, onnx_model_graph_node)
-        regex = re.compile("W|W\d*")
-        filters = self.get_filterNum(node_info, onnx_model_graph, regex)
+        filters = self.get_filterNum(node_info, onnx_model_graph)
         for index in range(len(node_info.attribute)):
             if node_info.attribute[index].name == "kernel_shape":
                 kernel_size = node_info.attribute[index].ints[0]
@@ -131,6 +134,45 @@ class onnxToNengo:
             code += "\tx = nengo_dl.tensor_layer(x, nengo." + str(neuron_type).upper() + "(amplitude=" + str(self.amplitude) + "))\n\n"
         elif neuron_type == None:   #default neuron_type = LIF
             code += "\tx = nengo_dl.tensor_layer(x, default_neuron_type)\n\n"
+        return code, output_shape
+
+    # def convert_zeropad2d(self, input_shape, index, onnx_model_graph):
+    #     onnx_model_graph_node = onnx_model_graph.node
+    #     node_info = onnx_model_graph_node[index]
+    #     pad_pads_name = node_info.input[1]
+    #     pad_value_name = node_info.input[2]
+    #     for m in range(len(onnx_model_graph.initializer)):
+    #         name = onnx_model_graph.initializer[m].name
+    #         for n in range(len(node_info.input)):
+    #             if node_info.input[n] == name and name == pad_pads_name:
+    #                 pad_pads = onnx_model_graph.initializer[m].int64_data
+    #             elif node_info.input[n] == name and name == pad_value_name:
+    #                 pad_value = int(onnx_model_graph.initializer[m].float_data[0])
+    #     data = []
+    #     for m in range(len(pad_pads)):
+    #         if pad_pads[m] != 0:
+    #             data.append(pad_pads[m])
+    #     pad_pads = data
+    #     if len(pad_pads) == 4:
+    #         return
+    #     elif len(pad_pads) == 2:
+    #         return
+    #     elif len(pad_pads) == 1:
+    #         return
+
+    def convert_batchnormalization(self, input_shape, node_info):
+        for index in range(len(node_info.attribute)):
+            if node_info.attribute[index].name == "momentum":
+                momentum = round(node_info.attribute[index].f, 4)
+                if momentum == 0:
+                    momentum = 0.99
+            elif node_info.attribute[index].name == "epsilon":
+                epsilon = round(node_info.attribute[index].f, 4)
+                if epsilon == 0:
+                    epsilon = 0.001
+        code = ""
+        code += "\tx = nengo_dl.tensor_layer(x, tf.layers.batch_normalization, shape_in=(" + str(input_shape[0]) + ", " + str(input_shape[1]) + ", " + str(input_shape[2]) + "), momentum=" + str(momentum) + ", epsilon=" + str(epsilon) + ")\n\n"
+        output_shape = input_shape
         return code, output_shape
 
     def convert_maxpool(self, input_shape, node_info):
@@ -166,8 +208,7 @@ class onnxToNengo:
 
     def convert_dense(self, input_shape, index, onnx_model_graph):
         node_info = onnx_model_graph.node[index]
-        regex = re.compile("\d*")
-        dense_num = self.get_filterNum(node_info, onnx_model_graph, regex)
+        dense_num = self.get_dense_num(node_info, onnx_model_graph)
         code = ""
         code += "\tx = nengo_dl.tensor_layer(x, tf.layers.dense, units=" + str(dense_num) + ")\n\n"
         output_shape = [dense_num, 1]
@@ -189,15 +230,15 @@ class onnxToNengo:
 
     def gen_train(self, batch_size, steps, epochs, learning_rate, device):
         code = ""
-        code += "\tminibatch_size = " + str(batch_size) + "\n"
-        code += "\tsim = nengo_dl.Simulator(net, minibatch_size=" + str(batch_size) + ", device = \"/" + str(device) + ":0\")\n\n"
-        code += "\ttrain_data = {inp: train_data[0][:, None, :], out_p: train_data[1][:, None, :]}\n\n"
-        code += "\tn_steps = " + str(steps) + "\n"
-        code += "\ttest_data = {inp: np.tile(test_data[0][:minibatch_size*2, None, :], (1, n_steps, 1)), out_p_filt: np.tile(test_data[1][:minibatch_size*2, None, :], (1, n_steps, 1))}\n\n"
+        code += "minibatch_size = " + str(batch_size) + "\n"
+        code += "sim = nengo_dl.Simulator(net, minibatch_size=" + str(batch_size) + ", device = \"/" + str(device) + ":0\")\n\n"
+        code += "train_data = {inp: train_data[0][:, None, :], out_p: train_data[1][:, None, :]}\n\n"
+        code += "n_steps = " + str(steps) + "\n"
+        code += "test_data = {inp: np.tile(test_data[0][:minibatch_size*2, None, :], (1, n_steps, 1)), out_p_filt: np.tile(test_data[1][:minibatch_size*2, None, :], (1, n_steps, 1))}\n\n"
         code += "print(\"error before training: %.2f%%\" % sim.loss(test_data, {out_p_filt: classification_error}))\n"
         code += "opt = tf.train.RMSPropOptimizer(learning_rate=" + str(learning_rate) + ")\n"
         code += "sim.train(train_data, opt, objective={out_p: objective}, n_epochs=" + str(epochs) + ")\n"
-        code += "sim.save_params(\"./mnist_params\")\n"
+        code += "sim.save_params(\"./model_params\")\n"
         code += "print(\"error after training: %.2f%%\" % sim.loss(test_data, {out_p_filt: classification_error}))\n\n"
         code += "sim.close()"
         return code
@@ -221,13 +262,24 @@ class onnxToNengo:
     def get_nengoCode(self):
         return self.nengoCode
 
-    def get_filterNum(self, node_info, onnx_model_graph, regex):
+    def get_filterNum(self, node_info, onnx_model_graph):
+        weight_name = node_info.input[1]
         for m in range(len(onnx_model_graph.initializer)):
-            weight_name = onnx_model_graph.initializer[m].name
+            name = onnx_model_graph.initializer[m].name
             for n in range(len(node_info.input)):
-                if node_info.input[n] == weight_name and regex.findall(weight_name):
+                if node_info.input[n] == name and name == weight_name:
                     shape = onnx_model_graph.initializer[m].dims
                     return shape[0]
+        return None
+
+    def get_dense_num(self, node_info, onnx_model_graph):
+        weight_name = node_info.input[1]
+        for m in range(len(onnx_model_graph.initializer)):
+            name = onnx_model_graph.initializer[m].name
+            for n in range(len(node_info.input)):
+                if node_info.input[n] == name and name == weight_name:
+                    shape = onnx_model_graph.initializer[m].dims
+                    return shape[1]
         return None
 
     def print_node(self):
@@ -250,9 +302,9 @@ class convert_snnOnnx:
         onnx.save(onnx_model, result_path)
         
 if __name__ == "__main__":
-    onnx_file_path = "../model/model2onnx/cnn2onnx.onnx"
-    result_file_path = "../model/onnx2snn/cnn2snn.onnx"
+    onnx_file_path = "../model/model2onnx/vgg162onnx.onnx"
+    result_file_path = "../model/onnx2snn/vgg162snn.onnx"
     cso = convert_snnOnnx()
     cso.convert_snnOnnx(onnx_file_path, result_file_path, "LIF")
-    otn = onnxToNengo(result_file_path, device = "cpu")
+    otn = onnxToNengoCode(result_file_path)
     otn.makefile("../result/nengo_code.py")
