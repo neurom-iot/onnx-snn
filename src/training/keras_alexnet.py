@@ -3,23 +3,25 @@ from keras.utils import np_utils
 from keras.models import Sequential
 from keras.layers import Dense, Conv2D, MaxPooling2D, Dropout, Flatten, Activation, AveragePooling2D, BatchNormalization
 from keras.callbacks import ModelCheckpoint, EarlyStopping
+from keras import backend as K
 import os
+import time
 import numpy as np
 np.random.seed(1000)
-
+K.tensorflow_backend.set_image_dim_ordering('tf')
 ##Alexnet based keras
 
-# MODEL_SAVE_FOLDER_PATH = './model/'
+MODEL_SAVE_FOLDER_PATH = '../../model/dnn/alexnet/'
 
-# if not os.path.exists(MODEL_SAVE_FOLDER_PATH):
-#   os.mkdir(MODEL_SAVE_FOLDER_PATH)
+if not os.path.exists(MODEL_SAVE_FOLDER_PATH):
+  os.mkdir(MODEL_SAVE_FOLDER_PATH)
 
-# model_path = MODEL_SAVE_FOLDER_PATH + 'mnist-' + '{epoch:02d}-{val_loss:.4f}.h5'
+model_path = MODEL_SAVE_FOLDER_PATH + 'mnist-' + '{epoch:02d}-{val_loss:.4f}.h5'
 
-# cb_checkpoint = ModelCheckpoint(filepath = model_path, monitor = 'val_loss',
-#                                 verbose = 1, save_best_only = True)
+cb_checkpoint = ModelCheckpoint(filepath = model_path, monitor = 'val_loss',
+                                verbose = 1, save_best_only = True)
 
-# cb_early_stopping = EarlyStopping(monitor = 'val_loss', patience = 10)
+cb_early_stopping = EarlyStopping(monitor = 'val_loss', patience = 10)
 
 classes = 10
 
@@ -52,10 +54,12 @@ model.add(MaxPooling2D(pool_size = (2, 2), strides = (2, 2), padding = 'valid', 
 model.add(Conv2D(filters = 384, kernel_size = (3, 3), strides = (1, 1), padding = 'valid', name = 'block3_conv'))
 model.add(BatchNormalization())
 model.add(Activation('relu'))
+
 #block 4
 model.add(Conv2D(filters = 384, kernel_size = (3, 3), strides = (1, 1), padding = 'valid', name = 'block4_conv'))
 model.add(BatchNormalization())
 model.add(Activation('relu'))
+
 #block 5
 model.add(Conv2D(filters = 256, kernel_size = (3, 3), strides = (1, 1), padding = 'valid', name = 'block5_conv'))
 model.add(BatchNormalization())
@@ -67,27 +71,26 @@ model.add(Flatten(name = 'flatten'))
 model.add(Dense(4096, name = 'fullconnected1'))
 model.add(BatchNormalization())
 model.add(Activation('relu'))
-model.add(Dropout(0.4))
 
 model.add(Dense(4096, name = 'fullconnected2'))
 model.add(BatchNormalization())
 model.add(Activation('relu'))
-model.add(Dropout(0.4))
 
 model.add(Dense(1000, name = 'fullconnected3'))
 model.add(BatchNormalization())
 model.add(Activation('relu'))
-model.add(Dropout(0.4))
 
 model.add(Dense(classes, activation = 'softmax', name = 'predictions'))
 
 model.compile(loss = 'categorical_crossentropy', optimizer = 'adam', metrics = ['accuracy'])
 
+start_time = time.time()
 history = model.fit(X_train, Y_train,
                     validation_data = (X_validation, Y_validation),
-                    epochs = 10, batch_size = 100, verbose = 0)
-                    # callbacks = [cb_checkpoint, cb_early_stopping])
+                    epochs = 10, batch_size = 30, verbose = 0,
+                    callbacks = [cb_checkpoint, cb_early_stopping])
 
 test_loss, test_acc = model.evaluate(X_validation, Y_validation)
 print('test_acc: ', test_acc)
-model.save("../model/dnn/alexnet.h5")
+print('run time :', round(time.time()-start_time, 3))
+model.save(MODEL_SAVE_FOLDER_PATH + "/alexnet.h5")
