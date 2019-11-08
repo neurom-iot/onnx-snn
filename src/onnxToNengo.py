@@ -46,7 +46,7 @@ class onnxToNengoCode:
                 code, output_shape = self.convert_batchnormalization(output_shape, node_info)
                 self.nengoCode += code
             elif op_type == "maxpool":
-                code, output_shape = self.convert_maxpool(output_shape, node_info)
+                code, output_shape = self.convert_maxpool2d(output_shape, node_info)
                 self.nengoCode += code
             elif op_type == "averagepool":
                 code, output_shape = self.convert_avgpool2d(output_shape, node_info)
@@ -176,7 +176,7 @@ class onnxToNengoCode:
         output_shape = input_shape
         return code, output_shape
 
-    def convert_maxpool(self, input_shape, node_info):
+    def convert_maxpool2d(self, input_shape, node_info):
         for index in range(len(node_info.attribute)):
             if node_info.attribute[index].name == "kernel_shape":
                 pool_size = node_info.attribute[index].ints[0]
@@ -232,7 +232,7 @@ class onnxToNengoCode:
     def gen_train(self, batch_size, steps, epochs, learning_rate, device):
         code = ""
         code += "minibatch_size = " + str(batch_size) + "\n"
-        code += "sim = nengo_dl.Simulator(net, minibatch_size=" + str(batch_size) + ", device = \"/" + str(device) + ":0\")\n\n"
+        code += "sim = nengo_dl.Simulator(net, minibatch_size=minibatch_size" + ", device = \"/" + str(device) + ":0\")\n\n"
         code += "train_data = {inp: train_data[0][:, None, :], out_p: train_data[1][:, None, :]}\n\n"
         code += "n_steps = " + str(steps) + "\n"
         code += "test_data = {inp: np.tile(test_data[0][:minibatch_size*2, None, :], (1, n_steps, 1)), out_p_filt: np.tile(test_data[1][:minibatch_size*2, None, :], (1, n_steps, 1))}\n\n"
