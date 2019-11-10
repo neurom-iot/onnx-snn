@@ -87,7 +87,7 @@ model.compile(loss = 'categorical_crossentropy', optimizer = 'adam', metrics = [
 start_time = time.time()
 history = model.fit(X_train, Y_train,
                     validation_data = (X_validation, Y_validation),
-                    epochs = 10, batch_size = 30, verbose = 0,
+                    epochs = 100, batch_size = 32, verbose = 0,
                     callbacks = [cb_checkpoint, cb_early_stopping])
 
 test_loss, test_acc = model.evaluate(X_validation, Y_validation)
