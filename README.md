@@ -26,11 +26,14 @@
 * convert_pool2d - kind deal(Max, Average) --> O
 * convert_flatten function --> O
 * convert_matmul function --> O
+* convert_batchnormalization function --> O
 * softmax --> O
 * training, simulation --> O
-* -->10/29/2019
+* -->11/12/2019
 ---
-* Apply to different models --> X
-* nengo_dl model --> onnx-snn --> onnx --> X
-* onnx model, weight --> onnx-snn --> nengo_dl model --> X
+* nengo_dl support only Sequential network(ex vggnet, alexnet)
+---
+* Apply to different models(vgg16, vgg19, alexnet) --> X
+* nengo_dl model -> onnx-snn -> onnx -> keras model --> X
+* onnx model, weight -> onnx-snn -> nengo_dl model --> X
 ---
