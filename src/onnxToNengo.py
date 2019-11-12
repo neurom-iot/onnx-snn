@@ -4,7 +4,7 @@ import onnx
 import numpy as np
 
 class onnxToNengoCode:
-    def __init__(self, onnx_path, neuron_type = None, amplitude = 0.01, batch_size = 200, steps = 30, epochs = 10, learning_rate = 0.001, device = "gpu"):
+    def __init__(self, onnx_path, amplitude = 0.01, batch_size = 200, steps = 30, epochs = 10, learning_rate = 0.001, device = "cpu"):
         self.nengoCode = ""
         self.neuron_type = "LIF"                    #default Neuron Type = LIF
         self.amplitude = amplitude                  #default amplitude = 0.01
@@ -72,7 +72,7 @@ class onnxToNengoCode:
         code += "import tensorflow as tf\n\n"
         code += self.gen_dataset()
         code += self.gen_classification()
-        code += "with nengo.Network() as net:\n"
+        code += "with nengo.Network(seed=1000) as net:\n"
         code += "\tnet.config[nengo.Ensemble].max_rates = nengo.dists.Choice([100])\n"
         code += "\tnet.config[nengo.Ensemble].intercepts = nengo.dists.Choice([0])\n"
         code += "\tdefault_neuron_type = nengo." + str(self.neuron_type) + "(amplitude=" + str(self.amplitude) + ")\n"
@@ -131,8 +131,16 @@ class onnxToNengoCode:
             output_shape = [int((input_shape[0] - kernel_size) / strides + 1), int((input_shape[1] - kernel_size) / strides + 1), filters]
         code = ""
         code += "\tx = nengo_dl.tensor_layer(x, tf.layers.conv2d, shape_in=(" + str(input_shape[0]) + ", " + str(input_shape[1]) + ", " + str(input_shape[2]) + "), filters=" + str(filters) + ", kernel_size=" + str(kernel_size) + ", padding=\"" + padding + "\")\n"
-        if neuron_type == "lif":
-            code += "\tx = nengo_dl.tensor_layer(x, nengo." + str(neuron_type).upper() + "(amplitude=" + str(self.amplitude) + "))\n\n"
+        if neuron_type == "lif" :
+            code += "\tx = nengo_dl.tensor_layer(x, nengo.LIF(amplitude=" + str(self.amplitude) + "))\n\n"
+        if neuron_type == "lifrate":
+            code += "\tx = nengo_dl.tensor_layer(x, nengo.LIFRate)(amplitude=" + str(self.amplitude) + "))\n\n"
+        if neuron_type == "adaptivelif":
+            code += "\tx = nengo_dl.tensor_layer(x, nengo.AdaptiveLIF(amplitude=" + str(self.amplitude) + "))\n\n"
+        if neuron_type == "adaptivelifrate":
+            code += "\tx = nengo_dl.tensor_layer(x, nengo.AdaptiveLIFRate(amplitude=" + str(self.amplitude) + "))\n\n"
+        if neuron_type == "izhikevich":
+            code += "\tx = nengo_dl.tensor_layer(x, nengo.Izhikevich(amplitude=" + str(self.amplitude) + "))\n\n"
         elif neuron_type == None:   #default neuron_type = LIF
             code += "\tx = nengo_dl.tensor_layer(x, default_neuron_type)\n\n"
         return code, output_shape
@@ -249,10 +257,8 @@ class onnxToNengoCode:
         for index in range(node_index, node_len):
             node_info = onnx_model_graph_node[index]
             op_type = node_info.op_type.lower()
-            if op_type == "lif":
-                neuron_type = "lif"
-                return neuron_type
-
+            if op_type == "lif" or op_type == "lifrate" or op_type == "adaptivelif" or op_type == "adaptivelifrate" or op_type == "izhikevich":
+                return op_type
         return None
 
     def makefile(self, result_path):
