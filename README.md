@@ -29,7 +29,8 @@
 * convert_batchnormalization function --> O
 * softmax --> O
 * training, simulation --> O
-* -->11/12/2019
+* Run neuron type(LIF, LIFRate, AdaptiveLIF, AdaptiveLIFRate, Izhikevich) --> O
+* -->11/13/2019
 ---
 * nengo_dl support only Sequential network(ex vggnet, alexnet)
 ---
