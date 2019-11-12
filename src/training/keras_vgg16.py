@@ -5,13 +5,14 @@ from keras.layers import Dense, Conv2D, MaxPooling2D, Dropout, Flatten, Activati
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras import backend as K
 from PIL import Image
+from keras.callbacks import TensorBoard
 import os
 import time
 import numpy as np
 import pickle
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-# # The GPU id to use, usually either "0" or "1";
-# os.environ["CUDA_VISIBLE_DEVICES"]="0"
+# The GPU id to use, usually either "0" or "1";
+# os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 np.random.seed(1000)
 K.tensorflow_backend.set_image_dim_ordering('tf')
@@ -125,14 +126,16 @@ model.add(Dense(4096, name = 'fullconnected2'))
 model.add(BatchNormalization())
 model.add(Activation('relu'))
 model.add(Dense(classes, activation = 'softmax',  name = 'predictions'))
-# model = multi_gpu_model(model, gpus=2)
+model = multi_gpu_model(model, gpus=2)
+tensorboard = TensorBoard(log_dir='vgg16logs/{}'.format(time.time()), histogram_freq=0, write_graph=True, write_images=True)
+
 model.compile(loss = 'categorical_crossentropy', optimizer = 'adam', metrics = ['accuracy'])
 
 start_time = time.time()
 history = model.fit(X_train, Y_train,
                     validation_data = (X_test, Y_test),
                     epochs = 100, batch_size = 32, verbose = 1,
-                    callbacks = [cb_checkpoint])
+                    callbacks = [cb_checkpoint, tensorboard])
                     # callbacks = [cb_checkpoint, cb_early_stopping])
 
 with open(MODEL_SAVE_FOLDER_PATH + 'history.pickle', 'wb') as file_pi:
