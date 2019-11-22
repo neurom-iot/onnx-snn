@@ -15,6 +15,14 @@
     * Training weights with NengoDL (Rate neuron)
     * Writing the trained model to ONNX-SNN
 
+## source
+* convert_snnOnnx.py
+    * ONNX -> ONNX-SNN
+* onnxToNengoCode.py
+    * ONNX-SNN -> Nengo Code
+* onnxToNengoModel.py
+    * ONNX-SNN -> Nengo Model
+
 ## Progress
 * Converting ONNX of DNN to ONNX-SNN
 * Reading ONNX-SNN and building Nengodl code
