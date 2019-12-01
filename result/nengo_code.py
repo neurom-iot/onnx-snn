@@ -27,7 +27,7 @@ def objective(outputs, targets):
 def classification_error(outputs, targets):
 	return 100 * tf.reduce_mean(tf.cast(tf.not_equal(tf.argmax(outputs[:, -1], axis=-1), tf.argmax(targets[:, -1], axis=-1)), tf.float32))
 
-with nengo.Network() as net:
+with nengo.Network(seed=1000) as net:
 	net.config[nengo.Ensemble].max_rates = nengo.dists.Choice([100])
 	net.config[nengo.Ensemble].intercepts = nengo.dists.Choice([0])
 	default_neuron_type = nengo.LIF(amplitude=0.01)
@@ -36,35 +36,39 @@ with nengo.Network() as net:
 	inp = nengo.Node([0] * 28 * 28 * 1)
 	x = inp
 
-	x = nengo_dl.tensor_layer(x, tf.layers.conv2d, shape_in=(28, 28, 1), filters=32, kernel_size=3, padding="same")
+	x = nengo_dl.tensor_layer(x, tf.layers.conv2d, shape_in=(28, 28, 1), filters=6, kernel_size=5, padding="same")
 	x = nengo_dl.tensor_layer(x, nengo.LIF(amplitude=0.01))
 
-	x = nengo_dl.tensor_layer(x, tf.layers.conv2d, shape_in=(28, 28, 32), filters=64, kernel_size=3, padding="same")
+	x = nengo_dl.tensor_layer(x, tf.layers.average_pooling2d, shape_in=(28, 28, 6), pool_size=2, strides=2)
+
+	x = nengo_dl.tensor_layer(x, tf.layers.conv2d, shape_in=(14, 14, 6), filters=16, kernel_size=5, padding="valid")
 	x = nengo_dl.tensor_layer(x, nengo.LIF(amplitude=0.01))
 
-	x = nengo_dl.tensor_layer(x, tf.layers.average_pooling2d, shape_in=(28, 28, 64), pool_size=2, strides=2)
+	x = nengo_dl.tensor_layer(x, tf.layers.average_pooling2d, shape_in=(10, 10, 16), pool_size=2, strides=2)
 
-	x = nengo_dl.tensor_layer(x, tf.layers.flatten)
+	x = nengo_dl.tensor_layer(x, tf.layers.conv2d, shape_in=(5, 5, 16), filters=120, kernel_size=5, padding="valid")
+	x = nengo_dl.tensor_layer(x, nengo.LIF(amplitude=0.01))
 
-	x = nengo_dl.tensor_layer(x, tf.layers.dense, units=128)
+	x = nengo_dl.tensor_layer(x, tf.layers.dense, units=84)
+	x = nengo_dl.tensor_layer(x, nengo.LIF(amplitude=0.01))
 
 	x = nengo_dl.tensor_layer(x, tf.layers.dense, units=10)
 
 	out_p = nengo.Probe(x)
 	out_p_filt = nengo.Probe(x, synapse=0.01)
 
-	minibatch_size = 200
-	sim = nengo_dl.Simulator(net, minibatch_size=200, device = "/cpu:0")
+minibatch_size = 200
+sim = nengo_dl.Simulator(net, minibatch_size=minibatch_size, device = "/cpu:0")
 
-	train_data = {inp: train_data[0][:, None, :], out_p: train_data[1][:, None, :]}
+train_data = {inp: train_data[0][:, None, :], out_p: train_data[1][:, None, :]}
 
-	n_steps = 30
-	test_data = {inp: np.tile(test_data[0][:minibatch_size*2, None, :], (1, n_steps, 1)), out_p_filt: np.tile(test_data[1][:minibatch_size*2, None, :], (1, n_steps, 1))}
+n_steps = 30
+test_data = {inp: np.tile(test_data[0][:minibatch_size*2, None, :], (1, n_steps, 1)), out_p_filt: np.tile(test_data[1][:minibatch_size*2, None, :], (1, n_steps, 1))}
 
 print("error before training: %.2f%%" % sim.loss(test_data, {out_p_filt: classification_error}))
 opt = tf.train.RMSPropOptimizer(learning_rate=0.001)
 sim.train(train_data, opt, objective={out_p: objective}, n_epochs=10)
-sim.save_params("./mnist_params")
+sim.save_params("./model_params")
 print("error after training: %.2f%%" % sim.loss(test_data, {out_p_filt: classification_error}))
 
 sim.close()
