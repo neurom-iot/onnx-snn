@@ -157,10 +157,25 @@ class toNengoModel:
         return model, output_shape, x
 
     def convert_dense(self, model, pre_layer, input_shape, index, onnx_model_graph):
-        node_info = onnx_model_graph.node[index]
+        onnx_model_graph_node = onnx_model_graph.node
+        node_info = onnx_model_graph_node[index]
         dense_num = self.get_dense_num(node_info, onnx_model_graph)
+        neuron_type = self.get_neuronType(index, onnx_model_graph_node)
         with model:
             x = nengo_dl.tensor_layer(pre_layer, tf.layers.dense, units = dense_num)
+            if neuron_type != "softmax":
+                if neuron_type == "lif" :
+                    x = nengo_dl.tensor_layer(x, nengo.LIF(amplitude = self.amplitude))
+                if neuron_type == "lifrate":
+                    x = nengo_dl.tensor_layer(x, nengo.LIFRate(amplitude = self.amplitude))
+                if neuron_type == "adaptivelif":
+                    x = nengo_dl.tensor_layer(x, nengo.AdaptiveLIF(amplitude = self.amplitude))
+                if neuron_type == "adaptivelifrate":
+                    x = nengo_dl.tensor_layer(x, nengo.AdaptiveLIFRate(amplitude = self.amplitude))
+                if neuron_type == "izhikevich":
+                    x = nengo_dl.tensor_layer(x, nengo.Izhikevich(amplitude = self.amplitude))
+                elif neuron_type == None:   #default neuron_type = LIF
+                    x = nengo_dl.tensor_layer(x, nengo.LIF(amplitude = self.amplitude))
         output_shape = [dense_num, 1]
         return model, output_shape, x
 
@@ -169,7 +184,7 @@ class toNengoModel:
         for index in range(node_index, node_len):
             node_info = onnx_model_graph_node[index]
             op_type = node_info.op_type.lower()
-            if op_type == "lif" or op_type == "lifrate" or op_type == "adaptivelif" or op_type == "adaptivelifrate" or op_type == "izhikevich":
+            if op_type == "lif" or op_type == "lifrate" or op_type == "adaptivelif" or op_type == "adaptivelifrate" or op_type == "izhikevich" or op_type == "softmax":
                 return op_type
         return None
 
@@ -203,4 +218,4 @@ class toNengoModel:
         return None
         
 if __name__ == "__main__":
-    otn = toNengoModel("../model/onnx2snn/cnn2snn.onnx")
+    otn = toNengoModel("../model/onnx2snn/lenet2snn.onnx")
