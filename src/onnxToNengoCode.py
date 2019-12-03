@@ -14,6 +14,7 @@ class toNengoCode:
         self.learning_rate = learning_rate          #default learning_rate = 0.01
         self.device = device                        #default device = gpu
         self.onnx_model = onnx.load(onnx_path)
+        
         # self.print_node()
         self.set_network()
 
@@ -33,7 +34,6 @@ class toNengoCode:
         input_shape = temp
         code, output_shape = self.gen_input(input_shape)
         self.nengoCode += code
-
         for index in range(node_len):
             node_info = onnx_model_graph.node[index]
             op_type = node_info.op_type.lower()
@@ -141,6 +141,8 @@ class toNengoCode:
             code += "\tx = nengo_dl.tensor_layer(x, nengo.AdaptiveLIFRate(amplitude=" + str(self.amplitude) + "))\n\n"
         elif neuron_type == "izhikevich":
             code += "\tx = nengo_dl.tensor_layer(x, nengo.Izhikevich(amplitude=" + str(self.amplitude) + "))\n\n"
+        elif neuron_type == "softlifrate":
+            code += "\tx = nengo_dl.tensor_layer(x, nengo_dl.neurons.SoftLIFRate())\n\n"
         elif neuron_type == None:   #default neuron_type = LIF
             code += "\tx = nengo_dl.tensor_layer(x, default_neuron_type)\n\n"
         return code, output_shape
@@ -233,6 +235,8 @@ class toNengoCode:
                 code += "\tx = nengo_dl.tensor_layer(x, nengo.AdaptiveLIFRate(amplitude=" + str(self.amplitude) + "))\n"
             elif neuron_type == "izhikevich":
                 code += "\tx = nengo_dl.tensor_layer(x, nengo.Izhikevich(amplitude=" + str(self.amplitude) + "))\n"
+            elif neuron_type == "softlifrate":
+                code += "\tx = nengo_dl.tensor_layer(x, nengo_dl.neurons.SoftLIFRate())\n"
             elif neuron_type == None:   #default neuron_type = LIF
                 code += "\tx = nengo_dl.tensor_layer(x, default_neuron_type)\n"
         code += "\n"
@@ -273,7 +277,7 @@ class toNengoCode:
         for index in range(node_index, node_len):
             node_info = onnx_model_graph_node[index]
             op_type = node_info.op_type.lower()
-            if op_type == "lif" or op_type == "lifrate" or op_type == "adaptivelif" or op_type == "adaptivelifrate" or op_type == "izhikevich" or op_type == "softmax":
+            if op_type == "lif" or op_type == "lifrate" or op_type == "adaptivelif" or op_type == "adaptivelifrate" or op_type == "izhikevich" or op_type == "softmax" or op_type == "softlifrate":
                 return op_type
         return None
 

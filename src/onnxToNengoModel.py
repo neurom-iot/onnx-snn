@@ -98,14 +98,16 @@ class toNengoModel:
             x = nengo_dl.tensor_layer(pre_layer, tf.layers.conv2d, shape_in = (input_shape[0], input_shape[1], input_shape[2]), filters = filters, kernel_size = kernel_size, padding = padding)
             if neuron_type == "lif" :
                 x = nengo_dl.tensor_layer(x, nengo.LIF(amplitude = self.amplitude))
-            if neuron_type == "lifrate":
+            elif neuron_type == "lifrate":
                 x = nengo_dl.tensor_layer(x, nengo.LIFRate(amplitude = self.amplitude))
-            if neuron_type == "adaptivelif":
+            elif neuron_type == "adaptivelif":
                 x = nengo_dl.tensor_layer(x, nengo.AdaptiveLIF(amplitude = self.amplitude))
-            if neuron_type == "adaptivelifrate":
+            elif neuron_type == "adaptivelifrate":
                 x = nengo_dl.tensor_layer(x, nengo.AdaptiveLIFRate(amplitude = self.amplitude))
-            if neuron_type == "izhikevich":
+            elif neuron_type == "izhikevich":
                 x = nengo_dl.tensor_layer(x, nengo.Izhikevich(amplitude = self.amplitude))
+            elif neuron_type == "softlifrate":
+                x = nengo_dl.tensor_layer(x, nengo_dl.neurons.SoftLIFRate())
             elif neuron_type == None:   #default neuron_type = LIF
                 x = nengo_dl.tensor_layer(x, nengo.LIF(amplitude = self.amplitude))
         return model, output_shape, x
@@ -166,14 +168,16 @@ class toNengoModel:
             if neuron_type != "softmax":
                 if neuron_type == "lif" :
                     x = nengo_dl.tensor_layer(x, nengo.LIF(amplitude = self.amplitude))
-                if neuron_type == "lifrate":
+                elif neuron_type == "lifrate":
                     x = nengo_dl.tensor_layer(x, nengo.LIFRate(amplitude = self.amplitude))
-                if neuron_type == "adaptivelif":
+                elif neuron_type == "adaptivelif":
                     x = nengo_dl.tensor_layer(x, nengo.AdaptiveLIF(amplitude = self.amplitude))
-                if neuron_type == "adaptivelifrate":
+                elif neuron_type == "adaptivelifrate":
                     x = nengo_dl.tensor_layer(x, nengo.AdaptiveLIFRate(amplitude = self.amplitude))
-                if neuron_type == "izhikevich":
+                elif neuron_type == "izhikevich":
                     x = nengo_dl.tensor_layer(x, nengo.Izhikevich(amplitude = self.amplitude))
+                elif neuron_type == "softlifrate":
+                    x = nengo_dl.tensor_layer(x, nengo_dl.neurons.SoftLIFRate())
                 elif neuron_type == None:   #default neuron_type = LIF
                     x = nengo_dl.tensor_layer(x, nengo.LIF(amplitude = self.amplitude))
         output_shape = [dense_num, 1]
@@ -184,7 +188,7 @@ class toNengoModel:
         for index in range(node_index, node_len):
             node_info = onnx_model_graph_node[index]
             op_type = node_info.op_type.lower()
-            if op_type == "lif" or op_type == "lifrate" or op_type == "adaptivelif" or op_type == "adaptivelifrate" or op_type == "izhikevich" or op_type == "softmax":
+            if op_type == "lif" or op_type == "lifrate" or op_type == "adaptivelif" or op_type == "adaptivelifrate" or op_type == "izhikevich" or op_type == "softmax" or op_type == "softlifrate":
                 return op_type
         return None
 
