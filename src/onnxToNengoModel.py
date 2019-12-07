@@ -107,7 +107,7 @@ class toNengoModel:
             elif neuron_type == "izhikevich":
                 x = nengo_dl.tensor_layer(x, nengo.Izhikevich(amplitude = self.amplitude))
             elif neuron_type == "softlifrate":
-                x = nengo_dl.tensor_layer(x, nengo_dl.neurons.SoftLIFRate())
+                x = nengo_dl.tensor_layer(x, nengo_dl.neurons.SoftLIFRate(amplitude = self.amplitude))
             elif neuron_type == None:   #default neuron_type = LIF
                 x = nengo_dl.tensor_layer(x, nengo.LIF(amplitude = self.amplitude))
         return model, output_shape, x
@@ -177,7 +177,7 @@ class toNengoModel:
                 elif neuron_type == "izhikevich":
                     x = nengo_dl.tensor_layer(x, nengo.Izhikevich(amplitude = self.amplitude))
                 elif neuron_type == "softlifrate":
-                    x = nengo_dl.tensor_layer(x, nengo_dl.neurons.SoftLIFRate())
+                    x = nengo_dl.tensor_layer(x, nengo_dl.neurons.SoftLIFRate(amplitude = self.amplitude))
                 elif neuron_type == None:   #default neuron_type = LIF
                     x = nengo_dl.tensor_layer(x, nengo.LIF(amplitude = self.amplitude))
         output_shape = [dense_num, 1]

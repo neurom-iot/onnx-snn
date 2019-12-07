@@ -236,7 +236,7 @@ class toNengoCode:
             elif neuron_type == "izhikevich":
                 code += "\tx = nengo_dl.tensor_layer(x, nengo.Izhikevich(amplitude=" + str(self.amplitude) + "))\n"
             elif neuron_type == "softlifrate":
-                code += "\tx = nengo_dl.tensor_layer(x, nengo_dl.neurons.SoftLIFRate())\n"
+                code += "\tx = nengo_dl.tensor_layer(x, nengo_dl.neurons.SoftLIFRate(amplitude=" + str(self.amplitude) + "))\n"
             elif neuron_type == None:   #default neuron_type = LIF
                 code += "\tx = nengo_dl.tensor_layer(x, default_neuron_type)\n"
         code += "\n"
