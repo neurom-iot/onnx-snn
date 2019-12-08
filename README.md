@@ -42,7 +42,7 @@
 ---
 * nengo_dl support only Sequential network(ex vggnet, alexnet)
 ---
-* Apply to different models(vgg16, vgg19, alexnet) --> X
+* Apply to different models(vgg16, vgg19, alexnet) --> O
 * nengo_dl model -> onnx-snn -> onnx -> keras model --> X
 * onnx model, weight -> onnx-snn -> nengo_dl model --> X
 ---
