@@ -6,6 +6,17 @@
 * ONNX-SNN is an extension for Spiking Neural Networks.
 * Its main purpose is to translate DNN model to SNN model.
 
+## Necessary Libraries
+* Tensorflow 1.10.0
+* Keras 2.2.2
+* Nengo 2.8.0
+* NengoDL 2.2.0
+* ONNX 1.6.0
+* Numpy 1.14.5
+* Protobuf 3.6.0
+* Cudatoolkit 9.0
+* Cudnn 7.6.4
+
 ## Features
 * ONNX-SNN
     * DNN's neuron -> spike neuron
@@ -14,7 +25,7 @@
     * Build Deep Spiking neural networks with ONNX-SNN
     * Training weights with NengoDL (Rate neuron)
     * Writing the trained model to ONNX-SNN
-
+    
 ## source
 * convert_snnOnnx.py
     * ONNX -> ONNX-SNN
